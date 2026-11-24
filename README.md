@@ -1,6 +1,47 @@
 # FIAP X — Plataforma de Vídeos
 
-Fundação local do monorepo para o processamento assíncrono de vídeos. A etapa atual disponibiliza a infraestrutura e os esqueletos dos serviços; ainda não implementa login de negócio, upload, criação de jobs nem extração de frames.
+Plataforma local de processamento assíncrono de vídeos: autenticação, upload privado, fila, extração de frames, ZIP e download autorizado.
+
+## Arquitetura
+
+```mermaid
+flowchart LR
+  Browser[React / Vite] --> KC[Keycloak]
+  Browser --> API[Video API / Gin]
+  API --> PG[(PostgreSQL)]
+  API --> S3[MinIO]
+  API --> MQ[RabbitMQ]
+  MQ --> Worker[Video workers]
+  Worker --> PG
+  Worker --> S3
+  MQ --> Notify[Notification service]
+  Notify --> Mailpit
+  Prometheus --> API
+  Prometheus --> Worker
+  Prometheus --> Notify
+  Grafana --> Prometheus
+```
+
+```mermaid
+sequenceDiagram
+  participant U as User
+  participant A as API
+  participant S as MinIO
+  participant D as PostgreSQL
+  participant Q as RabbitMQ
+  participant W as Worker
+  U->>A: create upload job
+  A->>S: presigned PUT URL
+  U->>S: upload video
+  U->>A: confirm job
+  A->>D: PENDING + outbox (transaction)
+  W->>D: publish outbox event
+  W->>Q: durable processing event
+  Q->>W: job message
+  W->>S: download source / upload ZIP
+  W->>D: COMPLETED
+  U->>A: presigned private download URL
+```
 
 ## Pré-requisitos
 
@@ -30,7 +71,9 @@ O Compose principal inclui a infraestrutura, os serviços e a observabilidade. O
 
 Após a primeira inicialização, o realm `fiap-video` e o cliente público `fiap-video-spa` estão disponíveis no Keycloak. O cliente usa Authorization Code com PKCE e o frontend utiliza os access tokens emitidos para falar com a API.
 
-Na fase atual, entre pelo frontend usando `demo` / `demo-local-only`. O upload aceita MP4, MOV, AVI, MKV e WebM até o limite de `MAX_UPLOAD_BYTES`; ele apenas registra o vídeo como `PENDING`. O processamento ainda não foi implementado.
+Entre pelo frontend usando `demo` / `demo-local-only`. O upload aceita MP4, MOV, AVI, MKV e WebM até o limite de `MAX_UPLOAD_BYTES`.
+
+O processamento é assíncrono: após a confirmação, o worker gera frames JPG a 1 FPS e um ZIP privado. A UI mostra estados e libera download somente em `COMPLETED`. Para escalar localmente, execute `docker compose up -d --build --scale video-worker=3`; acompanhe a fila em RabbitMQ Management.
 
 ## Verificação manual
 
