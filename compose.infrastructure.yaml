@@ -96,6 +96,16 @@ services:
       resources:
         limits: { cpus: "1.00", memory: 1G }
 
+  mailpit:
+    image: axllent/mailpit:v1.24.1
+    ports: ["8025:8025"]
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8025/api/v1/info || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+
 volumes:
   postgres_data:
   rabbitmq_data:

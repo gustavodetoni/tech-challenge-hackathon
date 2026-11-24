@@ -4,6 +4,7 @@ services:
     command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus"]
     volumes:
       - ./infrastructure/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infrastructure/observability/grafana:/etc/grafana/provisioning:ro
       - prometheus_data:/prometheus
     ports: ["9090:9090"]
     networks: [backend]

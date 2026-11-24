@@ -51,10 +51,15 @@ services:
 
   notification-service:
     build: ./services/notification-service
-    environment: { HTTP_ADDR: ":8082" }
+    environment:
+      HTTP_ADDR: ":8082"
+      RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:-video_mq}:${RABBITMQ_DEFAULT_PASS:-change-me-rabbitmq-local}@rabbitmq:5672/
+      SMTP_ADDR: mailpit:1025
+      NOTIFICATION_FROM: no-reply@fiap-video.local
     networks: [backend]
     depends_on:
       rabbitmq: { condition: service_healthy }
+      mailpit: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "/healthcheck", "http://localhost:8082/health/ready"]
       interval: 10s

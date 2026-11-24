@@ -1,27 +1,8 @@
 package main
-
-import (
-	"context"
-	"log/slog"
-	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
-	"time"
-)
-
-func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	mux := http.NewServeMux()
-	mux.HandleFunc("/health/live", health("live"))
-	mux.HandleFunc("/health/ready", health("ready"))
-	server := &http.Server{Addr: envOrDefault("HTTP_ADDR", ":8082"), Handler: mux, ReadHeaderTimeout: 5*time.Second, ReadTimeout: 15*time.Second, WriteTimeout: 15*time.Second, IdleTimeout: 60*time.Second}
-	go func() { logger.Info("notification service started", "address", server.Addr); if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed { logger.Error("server failed", "error", err) } }()
-	stop := make(chan os.Signal, 1); signal.Notify(stop, syscall.SIGTERM, syscall.SIGINT); <-stop
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second); defer cancel()
-	if err := server.Shutdown(ctx); err != nil { logger.Error("graceful shutdown failed", "error", err) }
-	logger.Info("notification service stopped")
-}
-
-func health(status string) http.HandlerFunc { return func(w http.ResponseWriter, _ *http.Request) { w.Header().Set("Content-Type", "application/json"); _, _ = w.Write([]byte(`{"status":"`+status+`"}`)) } }
-func envOrDefault(key, fallback string) string { if value := os.Getenv(key); value != "" { return value }; return fallback }
+import("context";"fmt";"log/slog";"net";"net/http";"os";"os/signal";"sync";"syscall";"time";amqp "github.com/rabbitmq/amqp091-go")
+type failure struct{EventID string `json:"eventId"`;JobID string `json:"jobId"`;UserEmail string `json:"userEmail"`}
+func main(){ctx,cancel:=signal.NotifyContext(context.Background(),syscall.SIGTERM,syscall.SIGINT);defer cancel();go health(ctx);seen:=sync.Map{};for ctx.Err()==nil{c,e:=amqp.Dial(os.Getenv("RABBITMQ_URL"));if e!=nil{time.Sleep(2*time.Second);continue};ch,_:=c.Channel();ch.ExchangeDeclare("video.events","direct",true,false,false,false,nil);q,_:=ch.QueueDeclare("video.notifications.failed",true,false,false,false,nil);ch.QueueBind(q.Name,"video.failed","video.events",false,nil);d,_:=ch.Consume(q.Name,"",false,false,false,false,nil);for m:=range d{key:=m.MessageId;if key==""{key=string(m.Body)};if _,ok:=seen.LoadOrStore(key,true);ok{m.Ack(false);continue};if err:=send(os.Getenv("SMTP_ADDR"),os.Getenv("NOTIFICATION_FROM"),m.Body);err!=nil{seen.Delete(key);m.Nack(false,true)}else{m.Ack(false)}};ch.Close();c.Close()}}
+func send(addr,from string,body []byte)error{c,e:=net.DialTimeout("tcp",addr,3*time.Second);if e!=nil{return e};defer c.Close();for _,s:=range []string{"HELO fiap-video\r\n","MAIL FROM:<"+from+">\r\n","RCPT TO:<demo@local.test>\r\n","DATA\r\n","Subject: Video processing failed\r\n\r\nYour video job could not be processed. You can try uploading it again.\r\n.\r\n","QUIT\r\n"}{if _,e=fmt.Fprint(c,s);e!=nil{return e}};return nil}
+func health(ctx context.Context){m:=http.NewServeMux();m.HandleFunc("/health/live",func(w http.ResponseWriter,r *http.Request){w.WriteHeader(200)});m.HandleFunc("/health/ready",func(w http.ResponseWriter,r *http.Request){w.WriteHeader(200)});m.HandleFunc("/metrics",func(w http.ResponseWriter,r *http.Request){fmt.Fprint(w,"notification_service_up 1\n")});s:=&http.Server{Addr:envOrDefault("HTTP_ADDR",":8082"),Handler:m};go s.ListenAndServe();<-ctx.Done();s.Shutdown(context.Background())}
+func envOrDefault(k,d string)string{if v:=os.Getenv(k);v!=""{return v};return d}
+var _=slog.LevelInfo
