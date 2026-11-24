@@ -1,29 +1,8 @@
 package main
-
-import (
-	"context"
-	"log/slog"
-	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
-	"time"
-)
-
-func main() { run("video-worker") }
-
-func run(service string) {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	mux := http.NewServeMux()
-	mux.HandleFunc("/health/live", health("live"))
-	mux.HandleFunc("/health/ready", health("ready"))
-	server := &http.Server{Addr: envOrDefault("HTTP_ADDR", ":8081"), Handler: mux, ReadHeaderTimeout: 5*time.Second, ReadTimeout: 15*time.Second, WriteTimeout: 15*time.Second, IdleTimeout: 60*time.Second}
-	go func() { logger.Info("service started", "service", service, "address", server.Addr); if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed { logger.Error("server failed", "error", err) } }()
-	stop := make(chan os.Signal, 1); signal.Notify(stop, syscall.SIGTERM, syscall.SIGINT); <-stop
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second); defer cancel()
-	if err := server.Shutdown(ctx); err != nil { logger.Error("graceful shutdown failed", "error", err) }
-	logger.Info("service stopped", "service", service)
-}
-
-func health(status string) http.HandlerFunc { return func(w http.ResponseWriter, _ *http.Request) { w.Header().Set("Content-Type", "application/json"); _, _ = w.Write([]byte(`{"status":"`+status+`"}`)) } }
+import("archive/zip";"context";"encoding/json";"io";"log/slog";"os";"os/exec";"path/filepath";"sort";"time";"github.com/google/uuid";"github.com/jackc/pgx/v5/pgxpool";"github.com/minio/minio-go/v7";"github.com/minio/minio-go/v7/pkg/credentials";amqp "github.com/rabbitmq/amqp091-go")
+type event struct{EventID uuid.UUID `json:"eventId"`;JobID uuid.UUID `json:"jobId"`}
 func envOrDefault(key, fallback string) string { if value := os.Getenv(key); value != "" { return value }; return fallback }
+func main(){ctx:=context.Background();l:=slog.New(slog.NewJSONHandler(os.Stdout,nil));db,e:=pgxpool.New(ctx,os.Getenv("DATABASE_URL"));if e!=nil{panic(e)};defer db.Close();s,_:=minio.New("minio:9000",&minio.Options{Creds:credentials.NewStaticV4(os.Getenv("MINIO_ROOT_USER"),os.Getenv("MINIO_ROOT_PASSWORD"),""),Secure:false});for{c,e:=amqp.Dial(os.Getenv("RABBITMQ_URL"));if e!=nil{time.Sleep(2*time.Second);continue};consume(ctx,l,db,s,c);c.Close()}}
+func consume(ctx context.Context,l *slog.Logger,db *pgxpool.Pool,s *minio.Client,c *amqp.Connection){ch,_:=c.Channel();defer ch.Close();ch.ExchangeDeclare("video.processing","direct",true,false,false,false,nil);q,_:=ch.QueueDeclare("video.processing.jobs",true,false,false,false,nil);ch.QueueBind(q.Name,"video.processing.requested","video.processing",false,nil);ch.Qos(1,0,false);go outbox(ctx,db,ch);d,_:=ch.Consume(q.Name,"",false,false,false,false,nil);for m:=range d{var e event;if json.Unmarshal(m.Body,&e)!=nil{m.Nack(false,false);continue};if err:=process(ctx,db,s,e.JobID);err!=nil{l.Error("processing failed","error",err);db.Exec(ctx,"UPDATE video_jobs SET status='FAILED',error_code='PROCESSING_FAILED',error_message='Processing could not be completed',finished_at=NOW() WHERE id=$1 AND status='PROCESSING'",e.JobID);m.Nack(false,false)}else{m.Ack(false)}}}
+func outbox(ctx context.Context,db *pgxpool.Pool,ch *amqp.Channel){ch.Confirm(false);for{rows,e:=db.Query(ctx,"SELECT id,payload FROM outbox_events WHERE published_at IS NULL ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 10");if e==nil{for rows.Next(){var id uuid.UUID;var p []byte;rows.Scan(&id,&p);e=ch.PublishWithContext(ctx,"video.processing","video.processing.requested",true,false,amqp.Publishing{Body:p,ContentType:"application/json",DeliveryMode:amqp.Persistent,MessageId:id.String()});if e==nil{ok:=<-ch.NotifyPublish(make(chan amqp.Confirmation,1));if ok.Ack{db.Exec(ctx,"UPDATE outbox_events SET published_at=NOW(),attempts=attempts+1 WHERE id=$1",id)}}};rows.Close()};time.Sleep(time.Second)}}
+func process(ctx context.Context,db *pgxpool.Pool,s *minio.Client,id uuid.UUID)error{var key,name string;e:=db.QueryRow(ctx,"UPDATE video_jobs SET status='PROCESSING',started_at=NOW(),attempt_count=attempt_count+1 WHERE id=$1 AND status='PENDING' RETURNING input_object_key,original_filename",id).Scan(&key,&name);if e!=nil{return nil};dir,e:=os.MkdirTemp("","video-");if e!=nil{return e};defer os.RemoveAll(dir);in:=filepath.Join(dir,"source"+filepath.Ext(name));if e=s.FGetObject(ctx,"video-inputs",key,in,minio.GetObjectOptions{});e!=nil{return e};if e=exec.CommandContext(ctx,"ffprobe","-v","error",in).Run();e!=nil{return e};pattern:=filepath.Join(dir,"frame-%06d.jpg");if e=exec.CommandContext(ctx,"ffmpeg","-y","-i",in,"-vf","fps=1",pattern).Run();e!=nil{return e};fs,_:=filepath.Glob(filepath.Join(dir,"frame-*.jpg"));if len(fs)==0{return os.ErrNotExist};sort.Strings(fs);zp:=filepath.Join(dir,"frames.zip");o,_:=os.Create(zp);z:=zip.NewWriter(o);for _,f:=range fs{w,_:=z.Create(filepath.Base(f));r,_:=os.Open(f);io.Copy(w,r);r.Close()};z.Close();o.Close();out:="results/"+id.String()+"/frames.zip";_,e=s.FPutObject(ctx,"video-results",out,zp,minio.PutObjectOptions{ContentType:"application/zip"});if e!=nil{return e};_,e=db.Exec(ctx,"UPDATE video_jobs SET status='COMPLETED',output_object_key=$2,finished_at=NOW() WHERE id=$1 AND status='PROCESSING'",id,out);return e}

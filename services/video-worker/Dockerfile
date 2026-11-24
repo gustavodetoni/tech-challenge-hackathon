@@ -4,7 +4,7 @@ COPY go.mod ./
 COPY . .
 RUN CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /out/video-worker ./cmd/worker
 FROM alpine:3.21
-RUN adduser -D -H app && apk add --no-cache wget
+RUN adduser -D -H app && apk add --no-cache wget ffmpeg
 COPY --from=build /out/video-worker /video-worker
 COPY --from=build /out/video-worker /healthcheck
 USER app

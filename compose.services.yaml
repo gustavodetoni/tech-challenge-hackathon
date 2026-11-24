@@ -28,7 +28,15 @@ services:
 
   video-worker:
     build: ./services/video-worker
-    environment: { HTTP_ADDR: ":8081" }
+    environment:
+      HTTP_ADDR: ":8081"
+      DATABASE_URL: postgres://${POSTGRES_USER:-video_app}:${POSTGRES_PASSWORD:-change-me-postgres-local}@postgres:5432/${POSTGRES_DB:-video_platform}?sslmode=disable
+      RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:-video_mq}:${RABBITMQ_DEFAULT_PASS:-change-me-rabbitmq-local}@rabbitmq:5672/
+      MINIO_INTERNAL_ENDPOINT: minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-video_minio_admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-minio-local}
+      WORKER_PREFETCH: "1"
+      PROCESSING_TIMEOUT: 10m
     networks: [backend]
     depends_on:
       rabbitmq: { condition: service_healthy }
