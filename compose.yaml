@@ -1,0 +1,7 @@
+name: fiap-video
+
+include:
+  - path: compose.infrastructure.yaml
+  - path: compose.services.yaml
+  - path: compose.observability.yaml
+

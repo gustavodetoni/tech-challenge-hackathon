@@ -1,0 +1,3 @@
+package video
+import "testing"
+func TestUploadValidation(t *testing.T){ if err:=valid(createInput{Filename:"movie.mp4",ContentType:"video/mp4",SizeBytes:1},10);err!=nil{t.Fatal(err)}; if err:=valid(createInput{Filename:"../bad.mp4",ContentType:"video/mp4",SizeBytes:1},10);err==nil{t.Fatal("expected traversal rejection")}; if err:=valid(createInput{Filename:"movie.exe",ContentType:"application/octet-stream",SizeBytes:1},10);err==nil{t.Fatal("expected type rejection")}; if err:=valid(createInput{Filename:"movie.mp4",ContentType:"video/mp4",SizeBytes:11},10);err==nil{t.Fatal("expected size rejection")} }

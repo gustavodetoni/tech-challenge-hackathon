@@ -1,0 +1,10 @@
+:root { font-family: Inter, system-ui, sans-serif; color: #f8fafc; background: #0f172a; }
+body { margin: 0; display: grid; min-height: 100vh; place-items: center; }
+main { width: min(42rem, calc(100% - 3rem)); padding: 3rem; border-radius: 1rem; background: #1e293b; box-sizing: border-box; }
+header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+form { display: flex; flex-wrap: wrap; gap: 1rem; align-items: end; margin: 1.5rem 0; }
+label { display: grid; gap: .5rem; }
+button { border: 0; border-radius: .4rem; padding: .65rem 1rem; color: #082f49; background: #38bdf8; cursor: pointer; font-weight: 700; }
+li { margin: .65rem 0; }
+h1 { color: #38bdf8; margin-top: 0; }
+.api { color: #cbd5e1; font-family: ui-monospace, monospace; font-size: .9rem; }

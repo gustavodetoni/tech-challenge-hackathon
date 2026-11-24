@@ -1,0 +1,109 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-video_platform}
+      POSTGRES_USER: ${POSTGRES_USER:-video_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-postgres-local}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/postgres:/docker-entrypoint-initdb.d:ro
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    deploy:
+      resources:
+        limits: { cpus: "0.75", memory: 768M }
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-video_mq}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-change-me-rabbitmq-local}
+    ports: ["15672:15672"]
+    volumes: [rabbitmq_data:/var/lib/rabbitmq]
+    networks: [backend]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    deploy:
+      resources:
+        limits: { cpus: "0.50", memory: 512M }
+
+  minio:
+    image: bitnamilegacy/minio:2025.4.22-debian-12-r1
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-video_minio_admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-minio-local}
+      MINIO_CONSOLE_PORT_NUMBER: "9001"
+    ports: ["9000:9000", "9001:9001"]
+    volumes: [minio_data:/bitnami/minio/data]
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/minio/health/live >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    deploy:
+      resources:
+        limits: { cpus: "0.50", memory: 512M }
+
+  minio-init:
+    image: amazon/aws-cli:2.17.38
+    environment:
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-video_minio_admin}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-change-me-minio-local}
+      AWS_DEFAULT_REGION: us-east-1
+    entrypoint: ["/bin/sh", "-c"]
+    command: >-
+      for bucket in video-inputs video-results; do
+      aws --endpoint-url http://minio:9000 s3api head-bucket --bucket $$bucket 2>/dev/null ||
+      aws --endpoint-url http://minio:9000 s3api create-bucket --bucket $$bucket;
+      done
+    networks: [backend]
+    depends_on:
+      minio: { condition: service_healthy }
+    restart: "no"
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.2.5
+    command: start-dev --import-realm
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-change-me-keycloak-local}
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+    ports: ["8083:8080"]
+    volumes:
+      - ./infrastructure/keycloak:/opt/keycloak/data/import:ro
+      - keycloak_data:/opt/keycloak/data
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "{ printf 'HEAD /health/ready HTTP/1.0\\r\\n\\r\\n' >&3; grep '200' <&3; } 3<>/dev/tcp/localhost/9000"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s
+    deploy:
+      resources:
+        limits: { cpus: "1.00", memory: 1G }
+
+volumes:
+  postgres_data:
+  rabbitmq_data:
+  minio_data:
+  keycloak_data:
+
+networks:
+  backend:
+    name: fiap-video-backend
+    internal: true
+

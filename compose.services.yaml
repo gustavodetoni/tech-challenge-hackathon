@@ -1,0 +1,76 @@
+services:
+  video-api:
+    build: ./services/video-api
+    environment:
+      HTTP_ADDR: :8080
+      DATABASE_URL: postgres://${POSTGRES_USER:-video_app}:${POSTGRES_PASSWORD:-change-me-postgres-local}@postgres:5432/${POSTGRES_DB:-video_platform}?sslmode=disable
+      KEYCLOAK_ISSUER_URL: ${KEYCLOAK_ISSUER_URL:-http://localhost:8083/realms/fiap-video}
+      KEYCLOAK_JWKS_URL: http://keycloak:8080/realms/fiap-video/protocol/openid-connect/certs
+      KEYCLOAK_AUDIENCE: fiap-video-spa
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+      MINIO_INTERNAL_ENDPOINT: minio:9000
+      MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-localhost:9000}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-video_minio_admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-minio-local}
+    ports: ["8080:8080"]
+    networks: [backend]
+    depends_on:
+      postgres: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "/healthcheck", "http://localhost:8080/health/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 5s
+    deploy:
+      resources:
+        limits: { cpus: "0.50", memory: 256M }
+
+  video-worker:
+    build: ./services/video-worker
+    environment: { HTTP_ADDR: ":8081" }
+    networks: [backend]
+    depends_on:
+      rabbitmq: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "/healthcheck", "http://localhost:8081/health/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+    deploy:
+      resources:
+        limits: { cpus: "0.25", memory: 128M }
+
+  notification-service:
+    build: ./services/notification-service
+    environment: { HTTP_ADDR: ":8082" }
+    networks: [backend]
+    depends_on:
+      rabbitmq: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "/healthcheck", "http://localhost:8082/health/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+    deploy:
+      resources:
+        limits: { cpus: "0.25", memory: 128M }
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080}
+        VITE_KEYCLOAK_URL: ${VITE_KEYCLOAK_URL:-http://localhost:8083}
+        VITE_KEYCLOAK_REALM: ${VITE_KEYCLOAK_REALM:-fiap-video}
+        VITE_KEYCLOAK_CLIENT_ID: ${VITE_KEYCLOAK_CLIENT_ID:-fiap-video-spa}
+    ports: ["5173:80"]
+    networks: [backend]
+    depends_on:
+      video-api: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost/ || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+
