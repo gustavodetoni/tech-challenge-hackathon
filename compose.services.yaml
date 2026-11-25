@@ -37,6 +37,8 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-fiap1234}
       WORKER_PREFETCH: "1"
       PROCESSING_TIMEOUT: 10m
+      # Local-only test hook. Leave empty in deployments to disable it.
+      WORKER_FORCE_FAILURE_PREFIX: ${WORKER_FORCE_FAILURE_PREFIX:-force-failure-}
     networks: [backend]
     depends_on:
       rabbitmq: { condition: service_healthy }
@@ -56,6 +58,7 @@ services:
       RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:-admin}:${RABBITMQ_DEFAULT_PASS:-fiap123}@rabbitmq:5672/
       SMTP_ADDR: mailpit:1025
       NOTIFICATION_FROM: no-reply@fiap-video.local
+      NOTIFICATION_TO: ${NOTIFICATION_TO:-admin@fiap-video.local}
     networks: [backend]
     depends_on:
       rabbitmq: { condition: service_healthy }

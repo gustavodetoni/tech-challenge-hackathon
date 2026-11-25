@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -12,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -25,6 +27,15 @@ import (
 type event struct {
 	EventID uuid.UUID `json:"eventId"`
 	JobID   uuid.UUID `json:"jobId"`
+}
+
+type failureEvent struct {
+	EventID    uuid.UUID `json:"eventId"`
+	EventType  string    `json:"eventType"`
+	Version    int       `json:"version"`
+	JobID      uuid.UUID `json:"jobId"`
+	OccurredAt time.Time `json:"occurredAt"`
+	ErrorCode  string    `json:"errorCode"`
 }
 
 type workerMetrics struct {
@@ -112,7 +123,11 @@ func consume(ctx context.Context, logger *slog.Logger, db *pgxpool.Pool, storage
 		if err != nil {
 			logger.Error("processing failed", "job_id", message.JobID, "error", err)
 			metrics.failed.Add(1)
-			_, _ = db.Exec(ctx, "UPDATE video_jobs SET status='FAILED', error_code='PROCESSING_FAILED', error_message='Processing could not be completed', finished_at=NOW() WHERE id=$1 AND status='PROCESSING'", message.JobID)
+			if markErr := markFailed(ctx, db, message.JobID); markErr != nil {
+				logger.Error("could not persist processing failure", "job_id", message.JobID, "error", markErr)
+				_ = delivery.Nack(false, true)
+				continue
+			}
 			_ = delivery.Nack(false, false)
 			continue
 		}
@@ -135,6 +150,7 @@ func outbox(ctx context.Context, db *pgxpool.Pool, rabbitURL string) {
 			continue
 		}
 		_ = channel.ExchangeDeclare("video.processing", "direct", true, false, false, false, nil)
+		_ = channel.ExchangeDeclare("video.events", "direct", true, false, false, false, nil)
 		if err = channel.Confirm(false); err != nil {
 			_ = channel.Close()
 			_ = connection.Close()
@@ -146,13 +162,18 @@ func outbox(ctx context.Context, db *pgxpool.Pool, rabbitURL string) {
 		// Keep this publishing channel alive until RabbitMQ drops it. The outer
 		// loop will then reconnect and retry only events without published_at.
 		for ctx.Err() == nil {
-			rows, err := db.Query(ctx, "SELECT id, payload FROM outbox_events WHERE published_at IS NULL ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 10")
+			rows, err := db.Query(ctx, "SELECT id, type, payload FROM outbox_events WHERE published_at IS NULL ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 10")
 			if err == nil {
 				for rows.Next() {
 					var id uuid.UUID
+					var eventType string
 					var payload []byte
-					_ = rows.Scan(&id, &payload)
-					err = channel.PublishWithContext(ctx, "video.processing", "video.processing.requested", true, false, amqp.Publishing{Body: payload, ContentType: "application/json", DeliveryMode: amqp.Persistent, MessageId: id.String()})
+					_ = rows.Scan(&id, &eventType, &payload)
+					exchange := "video.processing"
+					if eventType == "video.failed" {
+						exchange = "video.events"
+					}
+					err = channel.PublishWithContext(ctx, exchange, eventType, true, false, amqp.Publishing{Body: payload, ContentType: "application/json", DeliveryMode: amqp.Persistent, MessageId: id.String()})
 					if err == nil {
 						select {
 						case confirmation := <-confirms:
@@ -180,6 +201,9 @@ func process(ctx context.Context, db *pgxpool.Pool, storage *minio.Client, id uu
 	err = db.QueryRow(ctx, "UPDATE video_jobs SET status='PROCESSING', started_at=NOW(), attempt_count=attempt_count+1 WHERE id=$1 AND status='PENDING' RETURNING input_object_key, original_filename", id).Scan(&key, &name)
 	if err != nil {
 		return false, nil
+	}
+	if prefix := os.Getenv("WORKER_FORCE_FAILURE_PREFIX"); prefix != "" && strings.HasPrefix(name, prefix) {
+		return true, errors.New("forced processing failure for local notification test")
 	}
 
 	directory, err := os.MkdirTemp("", "video-")
@@ -238,4 +262,32 @@ func process(ctx context.Context, db *pgxpool.Pool, storage *minio.Client, id uu
 	}
 	_, err = db.Exec(ctx, "UPDATE video_jobs SET status='COMPLETED', output_object_key=$2, finished_at=NOW() WHERE id=$1 AND status='PROCESSING'", id, output)
 	return true, err
+}
+
+func markFailed(ctx context.Context, db *pgxpool.Pool, jobID uuid.UUID) error {
+	tx, err := db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	result, err := tx.Exec(ctx, "UPDATE video_jobs SET status='FAILED', error_code='PROCESSING_FAILED', error_message='Processing could not be completed', finished_at=NOW() WHERE id=$1 AND status='PROCESSING'", jobID)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return nil
+	}
+	eventID := uuid.New()
+	payload, err := json.Marshal(failureEvent{
+		EventID: eventID, EventType: "video.failed", Version: 1, JobID: jobID,
+		OccurredAt: time.Now().UTC(), ErrorCode: "PROCESSING_FAILED",
+	})
+	if err != nil {
+		return err
+	}
+	if _, err = tx.Exec(ctx, "INSERT INTO outbox_events (id, aggregate_id, type, payload) VALUES ($1, $2, $3, $4)", eventID, jobID, "video.failed", payload); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }

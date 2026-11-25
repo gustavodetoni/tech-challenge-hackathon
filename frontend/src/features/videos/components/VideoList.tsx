@@ -4,7 +4,7 @@ import type { VideoJob } from "../api/videos";
 import { getDownloadUrl } from "../api/videos";
 
 const statusLabel: Record<string, string> = {
-  AWAITING_UPLOAD: "Envio incompleto",
+  AWAITING_UPLOAD: "Aguardando envio",
   PENDING: "Na fila",
   PROCESSING: "Processando",
   COMPLETED: "Concluído",
