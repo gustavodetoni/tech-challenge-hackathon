@@ -1,7 +1,17 @@
 import { Button, Card, CardBody } from "@heroui/react";
+import { useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { keycloak } from "../features/auth/keycloak";
 
 export function LoginPage() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (keycloak.authenticated) {
+      void navigate({ to: "/dashboard", replace: true });
+    }
+  }, [navigate]);
+
   return (
     <main className="grid min-h-screen place-items-center bg-zinc-50 p-6 text-zinc-950 dark:bg-black dark:text-zinc-50">
       <Card className="w-full max-w-md border border-zinc-200 bg-white shadow-none dark:border-zinc-800 dark:bg-zinc-950">
@@ -13,7 +23,15 @@ export function LoginPage() {
           <p className="leading-6 text-zinc-500 dark:text-zinc-400">
             Envie, acompanhe e baixe seus resultados com segurança.
           </p>
-          <Button className="bg-blue-600 font-medium text-white" size="lg" onPress={() => keycloak.login()}>
+          <Button
+            className="bg-blue-600 font-medium text-white"
+            size="lg"
+            onPress={() =>
+              keycloak.authenticated
+                ? void navigate({ to: "/dashboard" })
+                : keycloak.login()
+            }
+          >
             Entrar na plataforma
           </Button>
         </CardBody>

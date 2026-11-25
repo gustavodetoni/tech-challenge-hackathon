@@ -1,6 +1,7 @@
 {
   "realm": "fiap-video",
   "enabled": true,
+  "sslRequired": "NONE",
   "displayName": "FIAP Video (local)",
   "clients": [{
     "clientId": "fiap-video-spa",

@@ -17,7 +17,7 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
     healthcheck:
-      test: ["CMD", "/healthcheck", "http://localhost:8080/health/ready"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/health/ready || exit 1"]
       interval: 10s
       timeout: 3s
       retries: 6
@@ -41,7 +41,7 @@ services:
     depends_on:
       rabbitmq: { condition: service_healthy }
     healthcheck:
-      test: ["CMD", "/healthcheck", "http://localhost:8081/health/ready"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8081/health/ready || exit 1"]
       interval: 10s
       timeout: 3s
       retries: 6
@@ -61,7 +61,7 @@ services:
       rabbitmq: { condition: service_healthy }
       mailpit: { condition: service_healthy }
     healthcheck:
-      test: ["CMD", "/healthcheck", "http://localhost:8082/health/ready"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8082/health/ready || exit 1"]
       interval: 10s
       timeout: 3s
       retries: 6
@@ -82,7 +82,7 @@ services:
     depends_on:
       video-api: { condition: service_healthy }
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost/ || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost/ || exit 1"]
       interval: 10s
       timeout: 3s
       retries: 6

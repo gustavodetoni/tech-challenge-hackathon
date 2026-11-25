@@ -5,12 +5,27 @@ export type VideoJob = {
   status: string;
   createdAt: string;
 };
+type ApiVideoJob = VideoJob & {
+  OriginalFilename?: string;
+  Status?: string;
+  CreatedAt?: string;
+};
 const base = import.meta.env.VITE_API_BASE_URL;
 const headers = () => ({ Authorization: `Bearer ${keycloak.token}` });
-export async function listVideos() {
+export async function listVideos(): Promise<VideoJob[]> {
   const r = await fetch(`${base}/api/v1/videos`, { headers: headers() });
   if (!r.ok) throw Error("Não foi possível carregar seus vídeos.");
-  return ((await r.json()).items ?? []) as VideoJob[];
+  const body = await r.json();
+  return (body.items ?? []).map(
+    (job: ApiVideoJob): VideoJob => ({
+      id: job.id,
+      originalFilename:
+        job.originalFilename ?? job.OriginalFilename ?? "Vídeo sem nome",
+      status: job.status ?? job.Status ?? "UNKNOWN",
+      createdAt:
+        job.createdAt ?? job.CreatedAt ?? new Date(0).toISOString(),
+    }),
+  );
 }
 export async function uploadVideo(
   file: File,
@@ -43,4 +58,12 @@ export async function uploadVideo(
     headers: headers(),
   });
   if (!confirm.ok) throw Error("Não foi possível confirmar o vídeo.");
+}
+
+export async function getDownloadUrl(jobId: string): Promise<string> {
+  const response = await fetch(`${base}/api/v1/videos/${jobId}/download`, {
+    headers: headers(),
+  });
+  if (!response.ok) throw Error("O arquivo ZIP ainda não está disponível.");
+  return (await response.json()).downloadUrl as string;
 }

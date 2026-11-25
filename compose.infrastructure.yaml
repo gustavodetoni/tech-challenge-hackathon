@@ -62,12 +62,13 @@ services:
       AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-video_minio_admin}
       AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-change-me-minio-local}
       AWS_DEFAULT_REGION: us-east-1
-    entrypoint: ["/bin/sh", "-c"]
-    command: >-
-      for bucket in video-inputs video-results; do
-      aws --endpoint-url http://minio:9000 s3api head-bucket --bucket $$bucket 2>/dev/null ||
-      aws --endpoint-url http://minio:9000 s3api create-bucket --bucket $$bucket;
-      done
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        for bucket in video-inputs video-results; do
+          aws --endpoint-url http://minio:9000 s3api head-bucket --bucket "$$bucket" 2>/dev/null || \
+          aws --endpoint-url http://minio:9000 s3api create-bucket --bucket "$$bucket"
+        done
     networks: [backend]
     depends_on:
       minio: { condition: service_healthy }
@@ -115,5 +116,4 @@ volumes:
 networks:
   backend:
     name: fiap-video-backend
-    internal: true
 
