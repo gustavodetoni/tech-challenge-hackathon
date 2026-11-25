@@ -1,0 +1,113 @@
+{
+  "uid": "fiap-video-health",
+  "title": "FIAP Video — Pipeline de processamento",
+  "schemaVersion": 39,
+  "version": 2,
+  "refresh": "10s",
+  "time": {"from": "now-30m", "to": "now"},
+  "tags": ["fiap", "video", "pipeline"],
+  "panels": [
+    {
+      "id": 1, "type": "stat", "title": "Aguardando upload",
+      "description": "Jobs criados cujo arquivo ainda não foi confirmado no MinIO.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum(fiap_video_jobs{status=\"AWAITING_UPLOAD\"}) or vector(0)", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "short", "color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 1}]}}, "overrides": []},
+      "options": {"reduceOptions": {"values": false, "calcs": ["lastNotNull"], "fields": ""}, "orientation": "auto", "textMode": "auto", "colorMode": "background_solid", "graphMode": "none", "justifyMode": "auto"},
+      "gridPos": {"h": 5, "w": 4, "x": 0, "y": 0}
+    },
+    {
+      "id": 2, "type": "stat", "title": "Na fila",
+      "description": "Jobs confirmados, aguardando o worker consumir a mensagem.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum(fiap_video_jobs{status=\"PENDING\"}) or vector(0)", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "short", "color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 1}, {"color": "orange", "value": 5}]}}, "overrides": []},
+      "options": {"reduceOptions": {"values": false, "calcs": ["lastNotNull"], "fields": ""}, "colorMode": "background_solid", "graphMode": "none"},
+      "gridPos": {"h": 5, "w": 4, "x": 4, "y": 0}
+    },
+    {
+      "id": 3, "type": "stat", "title": "Processando agora",
+      "description": "Jobs que o video-worker já assumiu e está convertendo em imagens.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum(fiap_video_jobs{status=\"PROCESSING\"}) or vector(0)", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "short", "color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "blue", "value": 1}]}}, "overrides": []},
+      "options": {"reduceOptions": {"values": false, "calcs": ["lastNotNull"], "fields": ""}, "colorMode": "background_solid", "graphMode": "none"},
+      "gridPos": {"h": 5, "w": 4, "x": 8, "y": 0}
+    },
+    {
+      "id": 4, "type": "stat", "title": "Concluídos",
+      "description": "Resultados ZIP disponíveis para download.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum(fiap_video_jobs{status=\"COMPLETED\"}) or vector(0)", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "short", "color": {"mode": "fixed", "fixedColor": "green"}}, "overrides": []},
+      "options": {"reduceOptions": {"values": false, "calcs": ["lastNotNull"], "fields": ""}, "colorMode": "background_solid", "graphMode": "none"},
+      "gridPos": {"h": 5, "w": 4, "x": 12, "y": 0}
+    },
+    {
+      "id": 5, "type": "stat", "title": "Falharam",
+      "description": "Jobs que não puderam ser processados.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum(fiap_video_jobs{status=\"FAILED\"}) or vector(0)", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "short", "color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}}, "overrides": []},
+      "options": {"reduceOptions": {"values": false, "calcs": ["lastNotNull"], "fields": ""}, "colorMode": "background_solid", "graphMode": "none"},
+      "gridPos": {"h": 5, "w": 4, "x": 16, "y": 0}
+    },
+    {
+      "id": 6, "type": "stat", "title": "Fila RabbitMQ",
+      "description": "Mensagens prontas para o video-worker consumir.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum(rabbitmq_queue_messages{queue=\"video.processing.jobs\"}) or vector(0)", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "short", "color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 1}, {"color": "red", "value": 10}]}}, "overrides": []},
+      "options": {"reduceOptions": {"values": false, "calcs": ["lastNotNull"], "fields": ""}, "colorMode": "background_solid", "graphMode": "none"},
+      "gridPos": {"h": 5, "w": 4, "x": 20, "y": 0}
+    },
+    {
+      "id": 7, "type": "timeseries", "title": "Jobs por etapa do pipeline",
+      "description": "Mostra em qual etapa cada trabalho está acumulado.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum by (status) (fiap_video_jobs)", "legendFormat": "{{status}}", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0, "color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "lineInterpolation": "stepAfter", "lineWidth": 2, "fillOpacity": 12, "showPoints": "never", "spanNulls": false}}, "overrides": []},
+      "options": {"tooltip": {"mode": "multi", "sort": "desc"}, "legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"]}},
+      "gridPos": {"h": 9, "w": 12, "x": 0, "y": 5}
+    },
+    {
+      "id": 8, "type": "timeseries", "title": "Worker: processamentos concluídos e falhos",
+      "description": "Taxa por minuto desde a inicialização do worker.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "increase(fiap_video_worker_jobs_completed_total[5m])", "legendFormat": "Concluídos (5 min)", "refId": "A"},
+        {"expr": "increase(fiap_video_worker_jobs_failed_total[5m])", "legendFormat": "Falhos (5 min)", "refId": "B"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0, "custom": {"drawStyle": "bars", "lineWidth": 1, "fillOpacity": 70, "showPoints": "never"}}, "overrides": []},
+      "options": {"tooltip": {"mode": "multi", "sort": "desc"}, "legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "total"]}},
+      "gridPos": {"h": 9, "w": 12, "x": 12, "y": 5}
+    },
+    {
+      "id": 9, "type": "stat", "title": "Evento pendente para RabbitMQ",
+      "description": "Evento salvo no outbox que ainda não foi publicado.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "fiap_video_outbox_pending or vector(0)", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "short", "color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 1}]}}, "overrides": []},
+      "options": {"reduceOptions": {"values": false, "calcs": ["lastNotNull"], "fields": ""}, "colorMode": "background_solid", "graphMode": "none"},
+      "gridPos": {"h": 5, "w": 8, "x": 0, "y": 14}
+    },
+    {
+      "id": 10, "type": "stat", "title": "Idade do job ativo mais antigo",
+      "description": "Alerta visual se um vídeo ficar muito tempo em fila ou processamento.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "fiap_video_oldest_active_job_seconds or vector(0)", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "s", "color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 120}, {"color": "red", "value": 600}]}}, "overrides": []},
+      "options": {"reduceOptions": {"values": false, "calcs": ["lastNotNull"], "fields": ""}, "colorMode": "background_solid", "graphMode": "none"},
+      "gridPos": {"h": 5, "w": 8, "x": 8, "y": 14}
+    },
+    {
+      "id": 11, "type": "stat", "title": "Serviços saudáveis",
+      "description": "Targets que o Prometheus conseguiu consultar.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum(up)", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "short", "color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "orange", "value": 3}, {"color": "green", "value": 5}]}}, "overrides": []},
+      "options": {"reduceOptions": {"values": false, "calcs": ["lastNotNull"], "fields": ""}, "colorMode": "background_solid", "graphMode": "none"},
+      "gridPos": {"h": 5, "w": 8, "x": 16, "y": 14}
+    }
+  ]
+}

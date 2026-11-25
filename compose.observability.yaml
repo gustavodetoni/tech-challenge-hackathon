@@ -4,7 +4,6 @@ services:
     command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus"]
     volumes:
       - ./infrastructure/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./infrastructure/observability/grafana:/etc/grafana/provisioning:ro
       - prometheus_data:/prometheus
     ports: ["9090:9090"]
     networks: [backend]
@@ -18,9 +17,11 @@ services:
     image: grafana/grafana:11.6.0
     environment:
       GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: admin-local-only
+      GF_SECURITY_ADMIN_PASSWORD: fiap123
       GF_USERS_ALLOW_SIGN_UP: "false"
-    volumes: [grafana_data:/var/lib/grafana]
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infrastructure/observability/grafana:/etc/grafana/provisioning:ro
     ports: ["3300:3000"]
     networks: [backend]
     depends_on:

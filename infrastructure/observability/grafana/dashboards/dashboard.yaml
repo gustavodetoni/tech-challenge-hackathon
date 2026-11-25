@@ -1,0 +1,7 @@
+apiVersion: 1
+providers:
+  - name: FIAP Video
+    folder: FIAP Video
+    type: file
+    options:
+      path: /etc/grafana/provisioning/dashboards

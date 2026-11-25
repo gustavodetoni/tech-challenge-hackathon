@@ -3,15 +3,15 @@ services:
     build: ./services/video-api
     environment:
       HTTP_ADDR: :8080
-      DATABASE_URL: postgres://${POSTGRES_USER:-video_app}:${POSTGRES_PASSWORD:-change-me-postgres-local}@postgres:5432/${POSTGRES_DB:-video_platform}?sslmode=disable
+      DATABASE_URL: postgres://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-fiap123}@postgres:5432/${POSTGRES_DB:-video_platform}?sslmode=disable
       KEYCLOAK_ISSUER_URL: ${KEYCLOAK_ISSUER_URL:-http://localhost:8083/realms/fiap-video}
       KEYCLOAK_JWKS_URL: http://keycloak:8080/realms/fiap-video/protocol/openid-connect/certs
       KEYCLOAK_AUDIENCE: fiap-video-spa
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
       MINIO_INTERNAL_ENDPOINT: minio:9000
       MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-localhost:9000}
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-video_minio_admin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-minio-local}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-fiap1234}
     ports: ["8080:8080"]
     networks: [backend]
     depends_on:
@@ -30,11 +30,11 @@ services:
     build: ./services/video-worker
     environment:
       HTTP_ADDR: ":8081"
-      DATABASE_URL: postgres://${POSTGRES_USER:-video_app}:${POSTGRES_PASSWORD:-change-me-postgres-local}@postgres:5432/${POSTGRES_DB:-video_platform}?sslmode=disable
-      RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:-video_mq}:${RABBITMQ_DEFAULT_PASS:-change-me-rabbitmq-local}@rabbitmq:5672/
+      DATABASE_URL: postgres://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-fiap123}@postgres:5432/${POSTGRES_DB:-video_platform}?sslmode=disable
+      RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:-admin}:${RABBITMQ_DEFAULT_PASS:-fiap123}@rabbitmq:5672/
       MINIO_INTERNAL_ENDPOINT: minio:9000
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-video_minio_admin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-minio-local}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-fiap1234}
       WORKER_PREFETCH: "1"
       PROCESSING_TIMEOUT: 10m
     networks: [backend]
@@ -53,7 +53,7 @@ services:
     build: ./services/notification-service
     environment:
       HTTP_ADDR: ":8082"
-      RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:-video_mq}:${RABBITMQ_DEFAULT_PASS:-change-me-rabbitmq-local}@rabbitmq:5672/
+      RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:-admin}:${RABBITMQ_DEFAULT_PASS:-fiap123}@rabbitmq:5672/
       SMTP_ADDR: mailpit:1025
       NOTIFICATION_FROM: no-reply@fiap-video.local
     networks: [backend]

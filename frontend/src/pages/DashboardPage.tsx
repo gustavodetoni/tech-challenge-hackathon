@@ -9,12 +9,7 @@ export function DashboardPage() {
   const query = useQuery({
     queryKey: ["videos"],
     queryFn: listVideos,
-    refetchInterval: (q) =>
-      q.state.data?.some((j) =>
-        ["AWAITING_UPLOAD", "PENDING", "PROCESSING"].includes(j.status),
-      )
-        ? 8000
-        : false,
+    refetchInterval: 8000,
   });
   return (
     <main className="min-h-screen bg-zinc-50 text-zinc-950 dark:bg-black dark:text-zinc-50">

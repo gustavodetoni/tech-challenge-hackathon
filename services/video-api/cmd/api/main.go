@@ -10,17 +10,18 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/fiap-x/video-platform/video-api/internal/auth"
+	"github.com/fiap-x/video-platform/video-api/internal/config"
+	appdb "github.com/fiap-x/video-platform/video-api/internal/db"
+	appmetrics "github.com/fiap-x/video-platform/video-api/internal/metrics"
+	"github.com/fiap-x/video-platform/video-api/internal/middleware"
+	"github.com/fiap-x/video-platform/video-api/internal/video"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"github.com/fiap-x/video-platform/video-api/internal/auth"
-	"github.com/fiap-x/video-platform/video-api/internal/config"
-	appdb "github.com/fiap-x/video-platform/video-api/internal/db"
-	"github.com/fiap-x/video-platform/video-api/internal/middleware"
-	"github.com/fiap-x/video-platform/video-api/internal/video"
 
 	_ "github.com/fiap-x/video-platform/video-api/docs"
 )
@@ -44,9 +45,15 @@ func main() {
 		logger.Error("database connection failed", "error", err)
 		os.Exit(1)
 	}
-	if err := appdb.Migrate(db); err != nil { logger.Error("database migration failed", "error", err); os.Exit(1) }
+	if err := appdb.Migrate(db); err != nil {
+		logger.Error("database migration failed", "error", err)
+		os.Exit(1)
+	}
 	videoAPI, err := video.New(db, cfg)
-	if err != nil { logger.Error("MinIO client initialization failed", "error", err); os.Exit(1) }
+	if err != nil {
+		logger.Error("MinIO client initialization failed", "error", err)
+		os.Exit(1)
+	}
 
 	router := newRouter(db, cfg, videoAPI)
 	address := cfg.HTTPAddr
@@ -84,6 +91,7 @@ func newRouter(db *gorm.DB, cfg config.Config, videos *video.API) *gin.Engine {
 	router.Use(gin.Logger(), gin.Recovery())
 	router.Use(cors.New(cors.Config{AllowOrigins: config.AllowedOrigins(cfg.CORSOrigin), AllowMethods: []string{"GET", "POST", "OPTIONS"}, AllowHeaders: []string{"Authorization", "Content-Type"}, AllowCredentials: false, MaxAge: 12 * time.Hour}))
 	router.GET("/health/live", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"status": "live"}) })
+	router.GET("/metrics", gin.WrapH(appmetrics.Handler(db)))
 	router.GET("/health/ready", func(c *gin.Context) {
 		sqlDB, err := db.DB()
 		if err != nil || sqlDB.PingContext(c.Request.Context()) != nil {
@@ -113,6 +121,8 @@ func newRouter(db *gorm.DB, cfg config.Config, videos *video.API) *gin.Engine {
 }
 
 func envOrDefault(key, fallback string) string {
-	if value := os.Getenv(key); value != "" { return value }
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
 	return fallback
 }

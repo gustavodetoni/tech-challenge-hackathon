@@ -65,13 +65,13 @@ O Compose principal inclui a infraestrutura, os serviços e a observabilidade. O
 | Swagger | http://localhost:8080/swagger/index.html | — |
 | Keycloak | http://localhost:8083 | `KEYCLOAK_ADMIN` / `KEYCLOAK_ADMIN_PASSWORD` do `.env` |
 | RabbitMQ Management | http://localhost:15672 | `RABBITMQ_DEFAULT_USER` / `RABBITMQ_DEFAULT_PASS` do `.env` |
-| MinIO Console | http://localhost:9001 | `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` do `.env` |
+| MinIO Console | http://localhost:9001 | `admin` / `fiap1234` (mínimo de 8 caracteres exigido pelo MinIO) |
 | Prometheus | http://localhost:9090 | — |
-| Grafana | http://localhost:3300 | `admin` / `admin-local-only` |
+| Grafana | http://localhost:3300 | `admin` / `fiap123` |
 
 Após a primeira inicialização, o realm `fiap-video` e o cliente público `fiap-video-spa` estão disponíveis no Keycloak. O cliente usa Authorization Code com PKCE e o frontend utiliza os access tokens emitidos para falar com a API.
 
-Entre pelo frontend usando `demo` / `demo-local-only`. O upload aceita MP4, MOV, AVI, MKV e WebM até o limite de `MAX_UPLOAD_BYTES`.
+Entre pelo frontend usando `admin` / `fiap123`. O upload aceita MP4, MOV, AVI, MKV e WebM até o limite de `MAX_UPLOAD_BYTES`.
 
 O processamento é assíncrono: após a confirmação, o worker gera frames JPG a 1 FPS e um ZIP privado. A UI mostra estados e libera download somente em `COMPLETED`. Para escalar localmente, execute `docker compose up -d --build --scale video-worker=3`; acompanhe a fila em RabbitMQ Management.
 
