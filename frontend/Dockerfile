@@ -1,9 +1,9 @@
 FROM node:22-alpine AS build
 WORKDIR /app
 RUN corepack enable
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml .npmrc ./
 # CI runners can inject pnpm's release-age policy; the committed lockfile is authoritative here.
-RUN pnpm config set minimumReleaseAge 0 && pnpm install --frozen-lockfile
+RUN pnpm config set minimumReleaseAge 0 && pnpm config set strictDepBuilds false && pnpm install --frozen-lockfile
 COPY . .
 ARG VITE_API_BASE_URL
 ARG VITE_KEYCLOAK_URL
