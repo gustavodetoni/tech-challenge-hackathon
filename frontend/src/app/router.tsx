@@ -14,8 +14,15 @@ import { DashboardPage } from "../pages/DashboardPage";
 function Root() {
   const [ready, setReady] = useState(false);
   useEffect(() => {
+    localStorage.removeItem("fiap-video.display-name");
     keycloak
       .init({ onLoad: "check-sso", pkceMethod: "S256" })
+      .then(async (authenticated) => {
+        if (!authenticated) return;
+        const profile = await keycloak.loadUserProfile();
+        const displayName = profile.firstName || profile.username;
+        if (displayName) localStorage.setItem("fiap-video.display-name", displayName);
+      })
       .finally(() => setReady(true));
   }, []);
   return ready ? (

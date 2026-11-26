@@ -3,6 +3,14 @@ import { LogOut } from "lucide-react";
 import { keycloak } from "../../features/auth/keycloak";
 
 export function AppHeader() {
+  const claims = keycloak.tokenParsed as { name?: string; given_name?: string; preferred_username?: string } | undefined;
+  const displayName =
+    localStorage.getItem("fiap-video.display-name") ||
+    claims?.name ||
+    claims?.given_name ||
+    claims?.preferred_username ||
+    "usuário";
+
   return (
     <header className="mb-7 flex flex-col justify-between gap-5 border-b border-zinc-200 pb-7 sm:flex-row sm:items-start">
       <div>
@@ -10,8 +18,7 @@ export function AppHeader() {
           PAINEL DE PROCESSAMENTO
         </p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight">
-          Olá,{" "}
-          {(keycloak.tokenParsed?.preferred_username as string) || "usuário"}.
+          Olá, {displayName}.
         </h1>
         <p className="mt-1.5 text-zinc-500">
           Gerencie seus vídeos e acompanhe seus processamentos.
@@ -19,7 +26,10 @@ export function AppHeader() {
       </div>
       <Button
         variant="outline"
-        onClick={() => keycloak.logout({ redirectUri: location.origin })}
+        onClick={() => {
+          localStorage.removeItem("fiap-video.display-name");
+          void keycloak.logout({ redirectUri: location.origin });
+        }}
       >
         <LogOut aria-hidden="true" className="size-4" />
         Sair
