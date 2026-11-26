@@ -1,22 +1,18 @@
 package main
 
 import (
-	"archive/zip"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
-	"strings"
 	"sync/atomic"
 	"time"
 
+	"github.com/fiap-x/video-platform/video-worker/internal/processor"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/minio/minio-go/v7"
@@ -202,8 +198,8 @@ func process(ctx context.Context, db *pgxpool.Pool, storage *minio.Client, id uu
 	if err != nil {
 		return false, nil
 	}
-	if prefix := os.Getenv("WORKER_FORCE_FAILURE_PREFIX"); prefix != "" && strings.HasPrefix(name, prefix) {
-		return true, errors.New("forced processing failure for local notification test")
+	if err := processor.ForcedFailure(name, os.Getenv("WORKER_FORCE_FAILURE_PREFIX")); err != nil {
+		return true, err
 	}
 
 	directory, err := os.MkdirTemp("", "video-")
@@ -222,41 +218,11 @@ func process(ctx context.Context, db *pgxpool.Pool, storage *minio.Client, id uu
 	if err = exec.CommandContext(ctx, "ffmpeg", "-y", "-i", input, "-vf", "fps=1", pattern).Run(); err != nil {
 		return true, err
 	}
-	frames, _ := filepath.Glob(filepath.Join(directory, "frame-*.jpg"))
-	if len(frames) == 0 {
-		return true, os.ErrNotExist
-	}
-	sort.Strings(frames)
-	archivePath := filepath.Join(directory, "frames.zip")
-	file, err := os.Create(archivePath)
+	archivePath, err := processor.ArchiveFrames(directory)
 	if err != nil {
 		return true, err
 	}
-	archive := zip.NewWriter(file)
-	for _, frame := range frames {
-		entry, entryErr := archive.Create(filepath.Base(frame))
-		if entryErr != nil {
-			_ = archive.Close()
-			_ = file.Close()
-			return true, entryErr
-		}
-		source, sourceErr := os.Open(frame)
-		if sourceErr != nil {
-			_ = archive.Close()
-			_ = file.Close()
-			return true, sourceErr
-		}
-		_, _ = io.Copy(entry, source)
-		_ = source.Close()
-	}
-	if err = archive.Close(); err != nil {
-		_ = file.Close()
-		return true, err
-	}
-	if err = file.Close(); err != nil {
-		return true, err
-	}
-	output := "results/" + id.String() + "/frames.zip"
+	output := processor.OutputObjectKey(id)
 	if _, err = storage.FPutObject(ctx, "video-results", output, archivePath, minio.PutObjectOptions{ContentType: "application/zip"}); err != nil {
 		return true, err
 	}

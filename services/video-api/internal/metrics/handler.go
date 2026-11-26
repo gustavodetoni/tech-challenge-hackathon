@@ -14,10 +14,6 @@ import (
 // worker restart.
 func Handler(db *gorm.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
-		fmt.Fprintln(w, "# HELP fiap_video_jobs Number of video jobs grouped by workflow status.")
-		fmt.Fprintln(w, "# TYPE fiap_video_jobs gauge")
-
 		var rows []struct {
 			Status string
 			Count  int64
@@ -26,6 +22,9 @@ func Handler(db *gorm.DB) http.HandlerFunc {
 			http.Error(w, "unable to collect video metrics", http.StatusServiceUnavailable)
 			return
 		}
+		w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+		fmt.Fprintln(w, "# HELP fiap_video_jobs Number of video jobs grouped by workflow status.")
+		fmt.Fprintln(w, "# TYPE fiap_video_jobs gauge")
 		for _, row := range rows {
 			fmt.Fprintf(w, "fiap_video_jobs{status=%s} %d\n", strconv.Quote(row.Status), row.Count)
 		}

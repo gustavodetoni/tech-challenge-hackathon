@@ -22,6 +22,15 @@ jobs:
       - run: go vet ./...
       - run: go test -race ./...
 
+  unit-coverage:
+    name: Unit coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: '1.25.x' }
+      - run: bash scripts/check-unit-coverage.sh
+
   frontend:
     runs-on: ubuntu-latest
     defaults:
