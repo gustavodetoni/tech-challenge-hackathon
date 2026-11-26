@@ -2,13 +2,25 @@ import { keycloak } from "../../auth/keycloak";
 export type VideoJob = {
   id: string;
   originalFilename: string;
+  contentType: string;
+  sizeBytes: number;
   status: string;
   createdAt: string;
+  startedAt?: string;
+  finishedAt?: string;
+  errorCode?: string;
+  errorMessage?: string;
 };
 type ApiVideoJob = VideoJob & {
   OriginalFilename?: string;
+  ContentType?: string;
+  SizeBytes?: number;
   Status?: string;
   CreatedAt?: string;
+  StartedAt?: string;
+  FinishedAt?: string;
+  ErrorCode?: string;
+  ErrorMessage?: string;
 };
 const base = import.meta.env.VITE_API_BASE_URL;
 const headers = () => ({ Authorization: `Bearer ${keycloak.token}` });
@@ -21,9 +33,15 @@ export async function listVideos(): Promise<VideoJob[]> {
       id: job.id,
       originalFilename:
         job.originalFilename ?? job.OriginalFilename ?? "Vídeo sem nome",
+      contentType: job.contentType ?? job.ContentType ?? "video",
+      sizeBytes: job.sizeBytes ?? job.SizeBytes ?? 0,
       status: job.status ?? job.Status ?? "UNKNOWN",
       createdAt:
         job.createdAt ?? job.CreatedAt ?? new Date(0).toISOString(),
+      startedAt: job.startedAt ?? job.StartedAt,
+      finishedAt: job.finishedAt ?? job.FinishedAt,
+      errorCode: job.errorCode ?? job.ErrorCode,
+      errorMessage: job.errorMessage ?? job.ErrorMessage,
     }),
   );
 }

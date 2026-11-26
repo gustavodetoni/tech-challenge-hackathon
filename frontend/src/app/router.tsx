@@ -6,7 +6,7 @@ import {
   redirect,
 } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Spinner } from "@heroui/react";
+import { LoaderCircle } from "lucide-react";
 import { keycloak } from "../features/auth/keycloak";
 import { LoginPage } from "../pages/LoginPage";
 import { DashboardPage } from "../pages/DashboardPage";
@@ -21,8 +21,8 @@ function Root() {
   return ready ? (
     <Outlet />
   ) : (
-    <main className="grid min-h-screen place-items-center bg-slate-950">
-      <Spinner />
+    <main className="grid min-h-screen place-items-center bg-zinc-50">
+      <LoaderCircle aria-label="Carregando aplicação" className="size-6 animate-spin text-blue-600" />
     </main>
   );
 }

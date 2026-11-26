@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
+	"mime"
 	"net"
 	"net/http"
 	"os"
@@ -76,17 +78,7 @@ func send(addr, from, to string, body []byte) error {
 	}
 	defer connection.Close()
 
-	message := fmt.Sprintf(
-		"Subject: Video processing failed\r\n"+
-			"From: <%s>\r\n"+
-			"To: <%s>\r\n"+
-			"Content-Type: text/plain; charset=UTF-8\r\n\r\n"+
-			"Your video could not be processed.\r\n"+
-			"Job ID: %s\r\n"+
-			"Reason: %s\r\n\r\n"+
-			"You can upload the video again.\r\n.\r\n",
-		from, to, event.JobID, event.ErrorCode,
-	)
+	message := renderFailureEmail(from, to, event)
 	for _, command := range []string{
 		"HELO fiap-video\r\n",
 		"MAIL FROM:<" + from + ">\r\n",
@@ -100,6 +92,42 @@ func send(addr, from, to string, body []byte) error {
 		}
 	}
 	return nil
+}
+
+func renderFailureEmail(from, to string, event failure) string {
+	const boundary = "fiap-video-notification-boundary"
+	reason := "Não foi possível processar o arquivo enviado."
+	if event.ErrorCode != "PROCESSING_FAILED" && event.ErrorCode != "" {
+		reason = "O processamento do vídeo foi interrompido."
+	}
+	subject := mime.QEncoding.Encode("UTF-8", "Não foi possível processar seu vídeo")
+	plainText := fmt.Sprintf(
+		"Olá!\r\n\r\nNão foi possível processar o seu vídeo. Você pode tentar enviá-lo novamente.\r\n\r\nIdentificação do processamento: %s\r\nMotivo: %s\r\n\r\nEquipe FIAP Video\r\n",
+		event.JobID, reason,
+	)
+	htmlBody := fmt.Sprintf(
+		"<!doctype html><html lang=\"pt-BR\"><body style=\"margin:0;background:#f4f4f5;font-family:Arial,sans-serif;color:#18181b\">"+
+			"<table role=\"presentation\" width=\"100%%\" cellpadding=\"0\" cellspacing=\"0\"><tr><td align=\"center\" style=\"padding:32px 16px\">"+
+			"<table role=\"presentation\" width=\"100%%\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:560px;background:#fff;border:1px solid #e4e4e7;border-radius:12px;overflow:hidden\">"+
+			"<tr><td style=\"padding:24px 28px;background:#18181b;color:#fff;font-weight:700;font-size:18px\">FIAP Video</td></tr>"+
+			"<tr><td style=\"padding:28px\"><div style=\"display:inline-block;padding:6px 10px;background:#fef2f2;color:#b91c1c;border-radius:999px;font-size:12px;font-weight:700\">PROCESSAMENTO NÃO CONCLUÍDO</div>"+
+			"<h1 style=\"margin:20px 0 10px;font-size:24px;line-height:1.25\">Não foi possível processar seu vídeo</h1>"+
+			"<p style=\"margin:0 0 20px;color:#52525b;line-height:1.6\">Encontramos um problema ao transformar o seu vídeo em imagens. Tente enviá-lo novamente.</p>"+
+			"<div style=\"padding:16px;background:#f4f4f5;border-radius:8px\"><div style=\"font-size:12px;color:#71717a;margin-bottom:4px\">Identificação do processamento</div>"+
+			"<div style=\"font-family:monospace;font-size:13px;word-break:break-all\">%s</div><div style=\"font-size:12px;color:#71717a;margin:16px 0 4px\">Motivo</div><div style=\"font-size:14px\">%s</div></div>"+
+			"<p style=\"margin:24px 0 0;color:#52525b;font-size:14px;line-height:1.6\">Se o problema persistir, verifique se o arquivo é um vídeo válido e tente novamente.</p></td></tr>"+
+			"<tr><td style=\"padding:18px 28px;border-top:1px solid #e4e4e7;color:#71717a;font-size:12px\">FIAP Video · Notificação automática</td></tr></table></td></tr></table></body></html>",
+		html.EscapeString(event.JobID), html.EscapeString(reason),
+	)
+
+	return fmt.Sprintf(
+		"Subject: %s\r\nFrom: <%s>\r\nTo: <%s>\r\nDate: %s\r\n"+
+			"MIME-Version: 1.0\r\nContent-Type: multipart/alternative; boundary=%q\r\n\r\n"+
+			"--%s\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n%s\r\n"+
+			"--%s\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n%s\r\n"+
+			"--%s--\r\n.\r\n",
+		subject, from, to, time.Now().Format(time.RFC1123Z), boundary, boundary, plainText, boundary, htmlBody, boundary,
+	)
 }
 
 func health(ctx context.Context) {
